@@ -26,7 +26,7 @@ keyboard.
 | `piped/vocab.py` | the desktop-action vocabulary, imported by **both** runtimes | stdlib only |
 | `piped/tools.py` | the LLM's only way to touch the machine: a verb allowlist and the tool schemas | `pipecat-env` |
 | `start-all.sh` | brings the whole stack up in the order that survives a small VM | bash |
-| Windows client | mic, speaker, screen capture, keyboard/mouse, tool endpoint on `:8766` | Windows Python |
+| `client/jarvis_client.py` | mic, speaker, screen capture, keyboard/mouse, and the tool endpoint on `:8766` — the half that must run on Windows | Windows Python |
 
 Two models are served by Ollama: a **4B vision talker** (`jarvis-llm`, built from
 `Modelfile.jarvis-llm`) and a **0.5B prefill-only router** (the `kev` project) that
@@ -57,11 +57,15 @@ p50 **0.86 s**, STT p50 **0.27 s**, turn detection p50 **0.015 s**.
    pipeline has no torch, the backend has no pipecat):
 
    ```bash
-   python3 -m venv jarvis-env && ./jarvis-env/bin/pip install \
-     fastapi uvicorn requests numpy scipy soundfile sherpa-onnx kokoro torch
-   python3 -m venv pipecat-env && ./pipecat-env/bin/pip install \
-     "pipecat-ai[kokoro,ollama,websocket,silero,smart-turn]"
+   python3 -m venv jarvis-env && ./jarvis-env/bin/pip install -r requirements.txt
+   python3 -m venv pipecat-env && ./pipecat-env/bin/pip install -r requirements-pipeline.txt
    ```
+
+   Two files, not one, because the split is deliberate: `requirements.txt` is the
+   backend / STT / router environment and carries torch; `requirements-pipeline.txt`
+   is the voice pipeline and carries pipecat. Neither should have the other's heavy
+   dependency — the pipeline has no business loading torch, and the backend has no
+   business loading pipecat.
 
 2. **STT model** — Sherpa-ONNX Parakeet TDT 0.6B v3 (int8) into
    `models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/`.
@@ -90,6 +94,27 @@ p50 **0.86 s**, STT p50 **0.27 s**, turn detection p50 **0.015 s**.
    Order matters: the talker is loaded *first*, then the router, the backend and
    the agent. Loading the talker while the others are already resident is what
    OOM-killed the VM repeatedly.
+
+## The Windows client
+
+`client/jarvis_client.py` is the other half and must run on Windows — it owns the
+microphone, the speaker, the screen and the input devices:
+
+```powershell
+pip install sounddevice websockets requests numpy pillow mss pyautogui pywin32
+python client\jarvis_client.py            # mic + speaker, and hosts :8766
+python client\jarvis_client.py --exec-only  # tools only, no audio
+```
+
+It connects to the agent on `ws://127.0.0.1:8765`, streams raw 16 kHz PCM up and
+plays 24 kHz PCM back, and hosts the tool endpoint the agent calls when the LLM
+invokes `run_action`. Screen descriptions round-trip: the client captures, posts
+the image to the WSL backend, and speaks the text that comes back.
+
+`window_targeting.py` sits beside it and does the window resolution (which browser
+is frontmost, matching a spoken app name to a real window).
+
+`JARVIS_TEST_CLIP` points `--clip` at a 16 kHz mono WAV for replay testing.
 
 ## Configuration
 
