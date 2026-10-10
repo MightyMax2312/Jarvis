@@ -1,0 +1,25 @@
+# Virtualenvs. About 7.5 GB and 579 MB respectively, and rebuildable -- they must
+# never be committed (and git cannot push the large files anyway).
+jarvis-env/
+pipecat-env/
+
+# Model weights, fetched per the README.
+models/
+*.onnx
+*.gguf
+*.tar.bz2
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Run output and scratch probes. restart.sh deletes the _*_probe.py files too,
+# which is exactly why they should not be tracked.
+*.log
+*.wav
+_*_probe*.py
+*.pid
+
+# Local environment
+.env
+.venv/
